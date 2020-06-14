@@ -23,6 +23,8 @@ void gpuEdgeCheck() {
     weight_t distance_through_u = dist + weight;
     __syncthreads();
 
+    /* relazation */
+
     //how to sync access to queue?
 }
 
@@ -41,8 +43,8 @@ void dijkstra(vertex_t source, const adjacency_list_t& adjacency_list, std::vect
     std::set <std::pair<weight_t, vertex_t>> vertex_queue;
     vertex_queue.insert(std::make_pair(min_distance[source], source));
 
-    omp_lock_t lock;
-    omp_init_lock(&lock);
+    // omp_lock_t lock;
+    // omp_init_lock(&lock);
 
 // nodes
     while (!vertex_queue.empty()) {
@@ -57,27 +59,33 @@ void dijkstra(vertex_t source, const adjacency_list_t& adjacency_list, std::vect
         // const std::vector <neighbor>& neighbors = adjacency_list[u];
         int edgesSize = neighbors.size();
 
-// neighbors
-        #pragma omp parallel for //shared(vertex_queue, min_distance)
-        for (int i=0; i < edgesSize; i++) {
-            vertex_t v = neighbors[i].target;
-            weight_t weight = neighbors[i].weight;
-            weight_t distance_through_u = dist + weight;
+        /*
+        copy queue, previos and min_distance to GPU
+        run kernel with as much threads as node edges (edgesSize)
+        copy queue back
+        */
 
-            if (distance_through_u < min_distance[v]) {
-                // #pragma omp critical { //writes
-                    omp_set_lock(&lock);
-                    vertex_queue.erase(std::make_pair(min_distance[v], v));
-                    min_distance[v] = distance_through_u;
-                    previous[v] = u;
-                    vertex_queue.insert(std::make_pair(min_distance[v], v));
-                // }
-                    omp_unset_lock(&lock);
-            }
-        }
+// neighbors
+        // #pragma omp parallel for //shared(vertex_queue, min_distance)
+        // for (int i=0; i < edgesSize; i++) {
+        //     vertex_t v = neighbors[i].target;
+        //     weight_t weight = neighbors[i].weight;
+        //     weight_t distance_through_u = dist + weight;
+
+        //     if (distance_through_u < min_distance[v]) {
+        //         // #pragma omp critical { //writes
+        //             omp_set_lock(&lock);
+        //             vertex_queue.erase(std::make_pair(min_distance[v], v));
+        //             min_distance[v] = distance_through_u;
+        //             previous[v] = u;
+        //             vertex_queue.insert(std::make_pair(min_distance[v], v));
+        //         // }
+        //             omp_unset_lock(&lock);
+        //     }
+        // }
         // #pragma omp barrier >> is here because of #parallel for
     }
-    omp_destroy_lock(&lock);
+    // omp_destroy_lock(&lock);
 }
 
 int main() {
