@@ -17,31 +17,19 @@
 // #include "data.h"
 #include "../utils/data.h"
 
-/*
-nvcc ./app.cu –o app
-./app
-https://stackoverflow.com/questions/18963293/cuda-atomics-change-flag/18968893#18968893
+/** @brief Dijkstra implementation with OpenMP
+    @author 557966
+    @date 31 V 2020
+    doxygen test
 */
 
-__global__ void checkNeighbors(const int* matrix, const int size, const int u, int* min_distance_dev, int* previous_dev) {
-    int tid = blockIdx.x*blockDim.x + threadIdx.x;
+/* 
+run: 
+    OMP_NUM_THREADS=4 ./dipa
+    valgrind --time-stamp=yes --tool=helgrind --log-file=helgrind.log ./dipa
 
-    if(tid < size) {
-        if(tid == u || matrix[u*size + tid] == -1) continue;
-
-        int w = matrix[u*size + tid];
-            weight_t distance_through_u = w + min_distance_dev[u];
-
-            if (distance_through_u < min_distance[tid]) {
-                atomicMin(&min_distance_dev[tid], distance_through_u);
-                atomicMax(&previous_dev[tid], u);
-                    // min_distance[v] = distance_through_u;   //atomic min
-                    // previous[v] = u;                        //atomic max
-                    // printf("relaxation: u=%d ud=%.2f v=%d vd=%.2f\n", u+1, dist, v+1, distance_through_u);
-            }
-
-        }
-    }
+    LD_LIBRARY_PATH=../../libgomp/build/x86_64-pc-linux-gnu/libgomp/.libs ./dipa
+*/
 
 void dijkstra(const vertex_t source, const std::vector<int>& matrix, const int size, std::vector <weight_t>& min_distance, std::vector <vertex_t>& previous) {
     // int size = static_cast<int>(matrix.size());
@@ -57,16 +45,6 @@ void dijkstra(const vertex_t source, const std::vector<int>& matrix, const int s
 
     std::vector<bool> visited;
     visited.resize(size, false);
-
-    int* min_distance_dev;
-    int* previous_dev;
-    int* matrix_dev;
-
-    cudaMalloc( &min_distance_dev, size*sizeof(double) );
-    cudaMalloc( &previous_dev, size*sizeof(int) );
-    cudaMalloc( &matrix_dev, size*size*sizeof(int) );
-
-    cudaMemcpy( matrix_dev, matrix.data(), size*size*sizeof(double), cudaMemcpyHostToDevice );
 
     /*copy to device
         matrix
@@ -89,13 +67,29 @@ void dijkstra(const vertex_t source, const std::vector<int>& matrix, const int s
         if(u == -1) { break;} //exit, if no unvisited nodes  
         visited[u] = true;  
 
-        cudaMemcpy( min_distance_dev, min_distance.data(), size*sizeof(double), cudaMemcpyHostToDevice );
-        cudaMemcpy( previous_dev, previous.data(), size*sizeof(int), cudaMemcpyHostToDevice );
+        //call kernel with threads=neighbors
+        for(int v=0; v<size; v++) {
+            if(u == v || matrix[u*size + v] == -1) {
+                // printf("continue: u=%d ud=%.2f v=%d vd=%.2f\n", u+1, dist, v+1, dist+matrix[u][v]);
+                continue;
+            }
 
-        checkNeighbors <<< 1, size >>> (matrix, size, u, min_distance_dev, previous_dev);
+            int w = matrix[u*size + v];
+            weight_t distance_through_u = w + min_distance[u];
 
-        cudaMemcpy( min_distance.data(), min_distance_dev, size*sizeof(double), cudaMemcpyDeviceToHost );
-        cudaMemcpy( previous.data(), previous_dev, size*sizeof(int), cudaMemcpyDeviceToHost );
+            if (distance_through_u < min_distance[v]) {
+                    min_distance[v] = distance_through_u;   //atomic min
+                    previous[v] = u;                        //atomic max
+                    // printf("relaxation: u=%d ud=%.2f v=%d vd=%.2f\n", u+1, dist, v+1, distance_through_u);
+            }
+
+        }
+
+        // for(int v=0; v<size; v++) {
+        //     printf("node=%d d=%.2f v=%s p=%d\n", v+1, min_distance[v], visited[v] ? "true" : "false", previous[v]+1);
+        // }
+        // std::cout << std::endl;
+
     }   
 }
 
