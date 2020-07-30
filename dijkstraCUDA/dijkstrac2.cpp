@@ -59,7 +59,7 @@ void dijkstra(const vertex_t source, const std::vector<int>& matrix, const int s
 
         for (int i=0; i < size*size; i+=size) {
             if(!visited[i/size] && min_distance[i/size] < dist) {
-                // dist = min_distance[i];
+                dist = min_distance[i];
                 u = i/size;
             }
         }
@@ -70,7 +70,7 @@ void dijkstra(const vertex_t source, const std::vector<int>& matrix, const int s
         //call kernel with threads=neighbors
         for(int v=0; v<size; v++) {
             if(u == v || matrix[u*size + v] == -1) {
-                // printf("continue: u=%d ud=%.2f v=%d vd=%.2f\n", u+1, dist, v+1, dist+matrix[u][v]);
+                printf("continue: u=%d ud=%.2f v=%d vd=%.2f\n", u, dist, v, dist + matrix[u*size+v]);
                 continue;
             }
 
@@ -80,7 +80,7 @@ void dijkstra(const vertex_t source, const std::vector<int>& matrix, const int s
             if (distance_through_u < min_distance[v]) {
                     min_distance[v] = distance_through_u;   //atomic min
                     previous[v] = u;                        //atomic max
-                    // printf("relaxation: u=%d ud=%.2f v=%d vd=%.2f\n", u+1, dist, v+1, distance_through_u);
+                    printf("relaxation: u=%d ud=%.2f v=%d vd=%.2f\n", u, dist, v, distance_through_u);
             }
 
         }

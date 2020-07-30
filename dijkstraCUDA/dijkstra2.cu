@@ -1,329 +1,316 @@
+#include "cuda_runtime.h"
+#include "device_launch_parameters.h"
+
 #include <iostream>
 #include <vector>
-#include <string>
-#include <list>
-
-// #include <limits> // for numeric_limits
-
 #include <set>
-#include <utility> // for pair
 #include <algorithm>
-#include <iterator>
 
+#include <iterator>
 #include <ctime>
 #include <time.h>
 #include <fstream>
 
-typedef int vertex_t; // vertex=node
-typedef double weight_t;
+#include <limits.h>
+#include <list>
+#include <time.h>
+#include <stdio.h>
 
-struct neighbor {
-    vertex_t target;
-    weight_t weight;
+#include <stdlib.h>
+#include <string.h>
+#include <map>
+#define _GNU_SOURCE 1
 
-    neighbor(vertex_t arg_target, weight_t arg_weight)
-            : target(arg_target), weight(arg_weight) {}
+/*
+make sure the graph file starts with p sp!
 
-    neighbor(std::string arg_target, std::string arg_weight)
-            : target(std::stoi(arg_target)), weight(std::stoi(arg_weight)) {}
-};
-
-// typedef std::vector <std::vector<neighbor>> adjacency_list_t;
-const weight_t max_weight = std::numeric_limits<double>::infinity();
-
-void printAdjacencyList(const std::map<int, std::vector<neighbor>>& adjacency_list) {
-    int size = adjacency_list.size();
-    std::printf("printing graph of size %d\n", size);
-
-    for(auto const& p : adjacency_list) {
-        std::printf("node[%d]: ", p.first);
-
-        for(auto const& v : p.second) {
-            std::printf("(%d, %.2f) ", v.target, v.weight);
-        }
-        std::printf("\n");
-    }
-        // std::printf("\n");
-}
-
-/**
-splits string on given delimiter
-return string vector
-here: char from to weight
+nvcc dijkstra2.cu -o dipa2; ./dipa2 ../resources/sampleGraph-1.gr 0 4
+dijkstraCUDA/dicu resources/ny-roads.gr 0 25906
 */
-std::vector<std::string> split(const std::string& s, char delimiter) {
-   std::vector<std::string> tokens;
-   std::string token;
-   std::istringstream tokenStream(s);
 
-   while (std::getline(tokenStream, token, delimiter)) {
-      tokens.push_back(token);
-   }
+#define ONE 1
+#define MAX_THREADS_PER_BLOCK 1024
+const int max_weight = INT_MAX; //2,147,483,647
+std::vector<int> matrix;
 
-   return tokens;
-}
-
-void readGR(std::ifstream& infile, adjacency_list_t& list) {
-    std::string line;
-    int size;
-    std::map<int, std::vector<neighbor>> ans;
-    std::vector<std::string> elems;
-
-    char type;
-    int source;
+// typedef int vertex_t; // vertex=node
+// typedef double weight_t;
+struct neighbor {
     int target;
     int weight;
 
-    do {
-        std::istringstream iss(line);
-        // std::printf("%s\n", line.c_str());
+    neighbor(int arg_target, int arg_weight)
+        : target(arg_target), weight(arg_weight) {}
+};
 
-        if (line.rfind("p sp", 0) == 0) {
-            elems = split(line, ' ');            
-            std::cout << "reading graph with " << elems[2] << " nodes and " << elems[3] << " edges" << std::endl;
+__global__ 
+void process_graph(const int* matrix, const int size, const int size2, int* min_distance, int* previous, int* visited, const bool debug) {
+    __shared__ int u;
+    int dist, ti, wi, v, w, distance_through_u;
+    int tid = blockDim.x * blockIdx.x + threadIdx.x;
+    // printf("start device %d\n", tid);
+
+    // worst case node loop
+    for(int i=0; i<size; i++) {
+        if(tid == 0) {
+            u = -1;
+            dist = max_weight;
+
+            if(debug) { 
+                printf("master thread started: su=%d, dist=%d\n", u, dist);
+                printf("\tsearching for new node to process");
+            }
+
+            for (int j=0; j < size; j++) {
+                if(visited[j] == 0 && min_distance[j] < dist) {
+                    dist = min_distance[j];
+                    u = j;
+                }
+            }
+            
+            if(u == -1) {
+                if(debug) { printf("...nothing found, exit\n"); }
+                break; // exit loop, if no unvisited nodes  
+            }
+            if(debug) { printf("...found %d\n", u); }
+            visited[u] = 1;  
+            // printf("end master block, print vectors of size %d\n", size);
         }
+        __syncthreads();
+        // printf("%d: dist=%d prev=%d vist=%d\n", tid, min_distance[tid], previous[tid], visited[tid]);
 
-        if(line.rfind("a", 0) == 0) {
-            // std::cout << "DJANGO: " << line << std::endl;
-            // std::vector<std::string> elems{ 
-            //     std::istream_iterator<std::string>(iss), {}
-            // };
-            elems = split(line, ' ');
-            // std::cout << "connection: " << elems[0] << " " << elems[1] << elems[2] << elems[3] << std::endl;
-            neighbor n = neighbor(elems[2], elems[3]);
-            list[std::stoi(elems[1])].push_back(n);
+        if(tid < size2/2) {
+            ti = size2 * u + tid * 2; // target index
+            wi = size2 * u + tid * 2 + 1; // weights index
+            v = matrix[ti]; // neighbor fixation
+            w = matrix[wi]; // weight
+            if(debug) { printf("tid %d: t_index = %d/%d, t_value = %d/%d\n", tid, ti, wi, v, w); }
+
+            if(v == -1 || w == -1) {
+                if(debug) { printf("tid=%d: skip empty slot\n", tid); }
+                continue;
+            }
+
+            if(v == u) {
+                if(debug) { printf("\tcontinue FROM %d TO %d\n", u, v); }
+                // printf("continue: u=%d ud=%d tid=%d\n", u, min_distance[u], tid);
+                continue;
+            }
+
+            distance_through_u = w + min_distance[u];
+            if(debug) { printf("tid=%d: w = %d, distance_through_u = %d, min_distance[%d] = %d\n", tid, w, distance_through_u, v, min_distance[v]); }
+
+            if (distance_through_u < min_distance[v]) {
+                min_distance[v] = distance_through_u;
+                previous[v] = u;
+                __syncthreads();
+                if(debug) { printf("\trelaxation FROM %d TO %d WITH %d + %d = %d\n", u, v, min_distance[u], w, min_distance[u] + w); }
+            }
         }
-     } while(std::getline(infile, line));
-
-    // printAdjacencyList(ans);
-}
-
-void printAdjacencyMatrix(const std::vector<std::vector<int>>& matrix) {
-  int size = static_cast<int>(matrix.size());
-  // std::cout << "size=" << size << std::endl;
-
-  for(int row=0; row<size; row++) { //node
-    std::cout << std::endl;
-
-    for(int col=0; col<size; col++) { //neeighbors
-      // std::cout << matrix[row][col] << " ";
-      printf("%2d ", matrix[row][col]);
     }
-  }
-  std::cout << std::endl;
 }
 
-void printNbrs(const std::vector<int>& nbrs) {
-  int size = static_cast<int>(nbrs.size());
-  // std::cout << "size=" << size << std::endl;
+void dijkstra(const int& source, const std::vector<int>& matrix, const int& size, const int& size2, std::vector<int>& min_distance, std::vector<int>& previous, std::vector<int>& visited, const bool& debug) {
+    int* matrix_dev;
+    int* min_distance_dev;
+    int* previous_dev;
+    int* visited_dev;
+    // bool* relaxation_dev;
+    
+    // printf("dijkstra print vec of size %d\n", size);
+    // for(int i=0; i<size; i++) printf("%d: dist=%d, prev=%d\n", i, min_distance[i], previous[i]);
 
-  std::cout << std::endl;
-  for(int row=0; row<size; row++) { //node
-      printf("node %2d neighbors: %2d\n", row, nbrs[row]);
+    printf("allocate and copy to device");
+    cudaMalloc( &matrix_dev, size * size2 * sizeof(int) );
+    cudaMalloc( &min_distance_dev, size*sizeof(int) );
+    cudaMalloc( &previous_dev, size*sizeof(int) );
+    cudaMalloc( &visited_dev, size*sizeof(int) );
+    // cudaMalloc( &relaxation_dev, sizeof(bool) );
+
+    cudaMemcpy( matrix_dev, matrix.data(), size * size2 * sizeof(int), cudaMemcpyHostToDevice );
+    cudaMemcpy( min_distance_dev, min_distance.data(), size*sizeof(int), cudaMemcpyHostToDevice );
+    cudaMemcpy( previous_dev, previous.data(), size*sizeof(int), cudaMemcpyHostToDevice );
+    cudaMemcpy( visited_dev, visited.data(), size*sizeof(int), cudaMemcpyHostToDevice );
+    
+    printf("...OK\nstart processing nodes, call kernel with %d threads", size2/2);
+    process_graph <<< ONE, size2/2 >>> (matrix_dev, size, size2, min_distance_dev, previous_dev, visited_dev, debug);
+
+    printf("...");
+    printf("...OK\ncopy data back\n");
+    cudaMemcpy( min_distance.data(), min_distance_dev, size * sizeof(int), cudaMemcpyDeviceToHost );
+    cudaMemcpy( previous.data(), previous_dev, size * sizeof(int), cudaMemcpyDeviceToHost );
+    printf("copy data back...OK\n");
+
+    if(debug) { 
+        printf("after dijkstra:\n");
+        for(int i=0; i<size; i++) printf("%d: dist=%d, prev=%d\n", i, min_distance[i], previous[i]);
     }
-}
 
-void readGR2(std::ifstream& infile, std::vector<std::vector<int>>& matrix) {
-    std::string line;
-    int size = -1;
-    std::vector<std::string> elems;
-    int source, target, weight;
-
-    do {
-        std::istringstream iss(line);
-        // std::printf("%s\n", line.c_str());
-
-        if (line.rfind("p sp", 0) == 0) {
-            elems = split(line, ' ');            
-            size = std::stoi(elems[2]);
-            std::cout << "red graph with " << size << " nodes and " << elems[3] << " edges" << std::endl;
-
-            matrix.resize(size, std::vector<int> (size, -1));
-            std::cout << "init matrix " << size << "x" << size << std::endl;
-        }
-
-        if(line.rfind("a", 0) == 0) {
-            elems = split(line, ' ');
-            source = std::stoi(elems[1]) - 1;
-            target = std::stoi(elems[2]) - 1;
-            weight = std::stoi(elems[3]);
-            std::cout << "connection: " << elems[0] << " " << source << " " << target << " " << weight << std::endl;
-            // std::cout << "connection: " << elems[0] << " " << elems[1] << " " << elems[2] << " " << elems[3] << std::endl;
-            matrix[source][target] = weight;
-        }
-     } while(std::getline(infile, line));
-
-    // printAdjacencyList(ans);
-     // return matrix;
+    cudaFree(matrix_dev);
+    cudaFree(min_distance_dev);
+    cudaFree(previous_dev);
+    cudaFree(visited_dev);
+    cudaDeviceReset();
 }
 
 void printAdjacencyMatrix2(const std::vector<int>& matrix, const int size) {
-  printf("\nprinting flattened vector of size %d and line lenght %d\n", size*size, size);
+  printf("\nprinting flattened vector of size %d and line lenght %d", size*size, size);
 
   for(int row=0; row < size*size; row += size) { //node
     std::cout << std::endl;
 
-    for(int col=0; col < size; col++) { //neeighbors
-      // std::cout << matrix[row][col] << " ";
+    for(int col=0; col < size; col++) { //neighbors
       printf("%2d ", matrix[row+col]);
     }
   }
   std::cout << std::endl;
 }
 
-void readGR4(std::ifstream& infile, std::vector<int>& matrix, int &size) {
-    std::string line;
-    std::vector<std::string> elems;
-    int source, target, weight;
-    int i=1;
+void printSparseMatrix(const std::vector<int>& matrix, const int size, const int size2) {
+  printf("\nprinting flattened sparse matrix of size %d and max line length %d\n", size, size2);
+  printf("structure: node -> { (edge_1, weight_1), ... (edge_size2, weight_size2) }\n");
 
-    do {
-        std::istringstream iss(line);
-        // std::printf("%s\n", line.c_str());
+  for(int row=0, r=0; row < size*size2; row += size2, r++) { //node
+    printf("node %d:", r);
 
-        if (line.rfind("p sp", 0) == 0) {
-            elems = split(line, ' ');            
-            size = std::stoi(elems[2]);
-            std::cout << "red graph with " << size << " nodes and " << elems[3] << " edges" << std::endl;
-
-            matrix.resize(size*size, -1);
-            std::cout << "init matrix " << size << "x" << size << std::endl;
-            std::cout << std::endl;
-        }
-
-        if(line.rfind("a", 0) == 0) {
-            elems = split(line, ' ');
-            source = std::stoi(elems[1]) - 1;
-            target = std::stoi(elems[2]) - 1;
-            weight = std::stoi(elems[3]);
-            std::cout << "arc " << i << " from " << source << " to " << target << " weight " << weight << std::endl;
-            i++;
-            // std::cout << "connection: " << elems[0] << " " << elems[1] << " " << elems[2] << " " << elems[3] << std::endl;
-            matrix[source*size + target] = weight;
-        }
-     } while(std::getline(infile, line));
-
-    // printAdjacencyList(ans);
-     // return matrix;
-}
-
-/*
-nvcc ./app.cu –o app
-./app
-https://stackoverflow.com/questions/18963293/cuda-atomics-change-flag/18968893#18968893
-*/
-
-__global__ void checkNeighbors(const int* matrix, const int size, const int u, int* min_distance_dev, int* previous_dev) {
-    int tid = blockIdx.x*blockDim.x + threadIdx.x;
-
-    if(tid < size) {
-        if(tid == u || matrix[u*size + tid] == -1) return;
-
-        int w = matrix[u*size + tid];
-            weight_t distance_through_u = w + min_distance_dev[u];
-
-            if (distance_through_u < min_distance_dev[tid]) {
-                atomicMin(&min_distance_dev[tid], distance_through_u);
-                atomicMax(&previous_dev[tid], u);
-                    // min_distance[v] = distance_through_u;   //atomic min
-                    // previous[v] = u;                        //atomic max
-                    // printf("relaxation: u=%d ud=%.2f v=%d vd=%.2f\n", u+1, dist, v+1, distance_through_u);
-            }
-
-        }
+    for(int col=0; col < size2; col++) { //neighbors
+      printf(" %2d ", matrix[row+col]);
     }
-
-void dijkstra(const vertex_t source, const std::vector<int>& matrix, const int size, std::vector <weight_t>& min_distance, std::vector <vertex_t>& previous) {
-    // int size = static_cast<int>(matrix.size());
-
-//    set weights on max, source on zero
-    min_distance.clear();
-    min_distance.resize(size, max_weight);
-    min_distance[source] = 0;
-
-//    clear nodes, size excludes source
-    previous.clear();
-    previous.resize(size, -1);
-
-    std::vector<bool> visited;
-    visited.resize(size, false);
-
-    int* min_distance_dev;
-    int* previous_dev;
-    int* matrix_dev;
-
-    cudaMalloc( &min_distance_dev, size*sizeof(double) );
-    cudaMalloc( &previous_dev, size*sizeof(int) );
-    cudaMalloc( &matrix_dev, size*size*sizeof(int) );
-
-    cudaMemcpy( matrix_dev, matrix.data(), size*size*sizeof(double), cudaMemcpyHostToDevice );
-
-    /*copy to device
-        matrix
-        dist
-        prev
-        fixed u
-    */
-
-    while (true) {
-        weight_t dist = max_weight;
-        vertex_t u = -1;
-
-        for (int i=0; i < size*size; i+=size) {
-            if(!visited[i/size] && min_distance[i/size] < dist) {
-                // dist = min_distance[i];
-                u = i/size;
-            }
-        }
-        
-        if(u == -1) { break;} //exit, if no unvisited nodes  
-        visited[u] = true;  
-
-        cudaMemcpy( min_distance_dev, min_distance.data(), size*sizeof(double), cudaMemcpyHostToDevice );
-        cudaMemcpy( previous_dev, previous.data(), size*sizeof(int), cudaMemcpyHostToDevice );
-
-        checkNeighbors <<< 1, size >>> (matrix, size, u, min_distance_dev, previous_dev);
-
-        cudaMemcpy( min_distance.data(), min_distance_dev, size*sizeof(double), cudaMemcpyDeviceToHost );
-        cudaMemcpy( previous.data(), previous_dev, size*sizeof(int), cudaMemcpyDeviceToHost );
-    }   
+    printf("\n");
+  }
+  // std::cout << std::endl;
 }
 
-std::list <vertex_t> getShortestPathToX(vertex_t vertex, const std::vector <vertex_t>& previous) {
-    std::list <vertex_t> path;
+std::list <int> getShortestPathToX(int vertex, const std::vector <int>& previous) {
+    std::list <int> path;
     
      do {
-        path.push_front(vertex+1);
+        path.push_front(vertex);
         vertex = previous[vertex];
      } while(vertex != -1);
     return path;
 }
 
-int main() {
-    std::ifstream infile("../resources/sampleGraph-1.gr");
-    int size;
-    std::vector<int> matrix;
-
-    readGR4(infile, matrix, size);
-    printAdjacencyMatrix2(matrix, size);
-
-    std::vector <weight_t> min_distance;
-    std::vector <vertex_t> previous;
-    int start = 0;
-    int target = 4;
-
-    std::printf("init OK\n\n");
-
+int main(int argc, char** argv) {
     const clock_t begin_time = clock();
-    dijkstra(start, matrix, size, min_distance, previous);
-    std::printf("distance from start node [%d] to end node [%d] is %.2f\n"
-                "calculation time: %f sec\n",
-                start, target, min_distance[target], float( clock () - begin_time ) /  CLOCKS_PER_SEC);
+    
+    FILE *fp;
+    const char *input_file_name;
+    char* line = NULL;
+    size_t llen = 0;
+    ssize_t read = 0;
 
-    std::list <vertex_t> path = getShortestPathToX(target, previous);
-    std::cout << "path: ";
-    std::copy(path.begin(), path.end(), std::ostream_iterator<vertex_t>(std::cout, " "));
+    int size, edges, source, target, weight, status, start, end, max_edges, size2, ti, wi, debug_int;
+    std::vector<int> min_distance, previous, visited;
+    // std::vector<int> matrix, min_distance, previous, visited;
+    bool debug = true;
+
+    printf("Dijkstra with CUDA\nargc=%d\n", argc);
+    if (argc == 5) {
+        input_file_name = argv[1];
+        start = atoi(argv[2]);
+        end = atoi(argv[3]);
+        debug_int = atoi(argv[4]);
+        if(debug_int == 0) { debug = false; }
+        printf("init from args: ");
+    }
+    else {
+        input_file_name = "resources/sampleGraph-1.gr";
+        start = 0;
+        end = 4;
+        printf("no or bad args submitted, use default values: ");
+    }
+    printf("\n\tinput file = %s\n\tsource = %d\n\ttarget = %d\n\tverbose = %d", input_file_name, start, end, debug);
+
+    fp = fopen(input_file_name,"r");
+    if(!fp) printf("Error Openning Graph File\n");
+    printf("\nReading Graph File");
+
+    printf("\n");
+    fscanf(fp, "p sp %d %d", &size, &edges);
+    printf("(first line) size=%d edges=%d\n", size, edges);
+    // matrix.resize(size*size, -1); //size2 = 1 159 330 980
+
+    std::map<int, std::vector<neighbor> > adjacency_list;
+    std::map<int, int> max_edges_map;
+
+    while ((read = getline(&line, &llen, fp)) != -1) {
+        if(debug) { printf("%3zu: %s", read, line); }
+        if(line[0] == 'a' && sscanf(line, "a %d %d %d", &source, &target, &weight) == 3) {
+                source--;
+                target--;
+                if(debug) { printf("\tarc from %d to %d weight %d | index %d\n", source, target, weight, source*size + target); }
+                neighbor n = neighbor(target, weight);
+                adjacency_list[source].push_back(n);
+                max_edges_map[source]++;
+        }
+    }    
+
+    max_edges = -1;
+    for(int i=0; i<size; i++) {
+        if(max_edges_map[i] > max_edges) {
+            max_edges = max_edges_map[i];
+        }
+    }
+    size2 = max_edges * 2;
+    printf("\n");
+    printf("filled temp map: max_edges = %d, size2 = %d,\n\tnew size = %d, square size = %d, diff = %d\n", max_edges, size2, size*size2, size*size, size*size - size*size2);
+
+    matrix.resize(size * size2, -1);
+    printf("\n");
+    printf("start transfer from map to sparse matrix\n");
+    // node
+    for(int i=0; i<size; i++) {
+        const std::vector <neighbor>& neighbors = adjacency_list.find(i)->second;
+        int temp_size = neighbors.size();
+        if(debug) { printf("node %d of size %d\n", i, temp_size); }
+
+        // node edges
+        for(int j=0; j < temp_size; j++) {
+            target = neighbors[j].target;
+            weight = neighbors[j].weight;
+            ti = size2 * i + j * 2;
+            wi = size2 * i + j * 2 + 1;
+            if(debug) { printf("\ttarget = %d weight = %d | t_index = %d/%d\n", target, weight, ti, wi); }
+            matrix[ti] = target;
+            matrix[wi] = weight;
+        }
+    }
+
+    if(fp) fclose(fp);    
+    printf("Reading Graph File...OK\nempty temp map");
+    adjacency_list.clear();
+    printf("...OK\n");
+    // printAdjacencyMatrix2(matrix, size);
+    if(debug) { printSparseMatrix(matrix, size, size2); }
+
+    printf("resize output vectors and set source to zero\n");
+    min_distance.resize(size, max_weight);
+    min_distance[start] = 0;
+    previous.resize(size, -1);
+    visited.resize(size, 0);
+    
+    // printf("main print vec of size %d\n", size);
+    // for(int i=0; i<size; i++) printf("vec[%d] = %d\n", i, min_distance[i]);
+    printf("init in %f sec OK\n\n", float( clock () - begin_time ) /  CLOCKS_PER_SEC);
+
+    printf("start dijkstra\n");
+    const clock_t begin_time2 = clock();
+    dijkstra(start, matrix, size, size2, min_distance, previous, visited, debug);
+    printf("distance from start node [%d] to end node [%d] is %2d\n"
+                "calculation time: %f sec\n", start, end, min_distance[end], float( clock () - begin_time2 ) /  CLOCKS_PER_SEC);
+
+    std::list<int> path = getShortestPathToX(end, previous);
+    size = path.size();
+    printf("path of size %d:", size);
+    // std::copy(path.begin(), path.end(), std::ostream_iterator<int>(std::cout, " "));
+    for(int i=0; i < size; i++) {
+        ti = path.front();
+        printf(" %d/%d", ti, min_distance[ti]);
+        path.pop_front();
+    }
     std::cout << std::endl;
+    printf("total run time is %f sec\n", float( clock () - begin_time ) /  CLOCKS_PER_SEC);
 
     return 0;
 }

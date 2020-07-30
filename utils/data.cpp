@@ -6,12 +6,13 @@
 #include <iterator>
 #include <algorithm>
 #include <map>
+#include <list>
 
 #include "data.h"
 
-void printAdjacencyList(const std::map<int, std::vector<neighbor>>& adjacency_list) {
+void printAdjacencyList(const adjacency_list_t &adjacency_list) {
     int size = adjacency_list.size();
-    std::printf("printing graph of size %d\n", size);
+    printf("printing graph of size %d\n", size);
 
     for(auto const& p : adjacency_list) {
         std::printf("node[%d]: ", p.first);
@@ -21,7 +22,48 @@ void printAdjacencyList(const std::map<int, std::vector<neighbor>>& adjacency_li
         }
         std::printf("\n");
     }
+
         // std::printf("\n");
+}
+
+std::list <vertex_t> getShortestPathToX(vertex_t vertex, const std::vector <vertex_t> &previous) {
+    std::list <vertex_t> path;
+    
+     do {
+        path.push_front(vertex);
+        vertex = previous[vertex];
+     } while(vertex != -1);
+    return path;
+}
+
+void readGR(std::ifstream& infile, adjacency_list_t& list) {
+    std::string line;
+    int source, target, weight, size;
+    std::map<int, std::vector<neighbor>> ans;
+    std::vector<std::string> elems;
+    char type;
+
+    do {
+        std::istringstream iss(line);
+        // std::printf("%s\n", line.c_str());
+
+        if (line.rfind("p sp", 0) == 0) {
+            elems = split(line, ' ');            
+            std::cout << "reading graph with " << elems[2] << " nodes and " << elems[3] << " edges" << std::endl;
+        }
+
+        if(line.rfind("a", 0) == 0) {
+            elems = split(line, ' ');
+            source = std::stoi(elems[1]) - 1;
+            target = std::stoi(elems[2]) - 1;
+            weight = std::stoi(elems[3]);
+
+            neighbor n = neighbor(target, weight);
+            list[source].push_back(n);
+        }
+     } while(std::getline(infile, line));
+
+    // printAdjacencyList(ans);
 }
 
 /**
@@ -39,100 +81,6 @@ std::vector<std::string> split(const std::string& s, char delimiter) {
    }
 
    return tokens;
-}
-
-void readGR(std::ifstream& infile, adjacency_list_t& list) {
-    std::string line;
-    int size;
-    std::map<int, std::vector<neighbor>> ans;
-    std::vector<std::string> elems;
-
-    char type;
-    int source;
-    int target;
-    int weight;
-
-    do {
-        std::istringstream iss(line);
-        // std::printf("%s\n", line.c_str());
-
-        if (line.rfind("p sp", 0) == 0) {
-            elems = split(line, ' ');            
-            std::cout << "reading graph with " << elems[2] << " nodes and " << elems[3] << " edges" << std::endl;
-        }
-
-        if(line.rfind("a", 0) == 0) {
-            // std::cout << "DJANGO: " << line << std::endl;
-            // std::vector<std::string> elems{ 
-            //     std::istream_iterator<std::string>(iss), {}
-            // };
-            elems = split(line, ' ');
-            // std::cout << "connection: " << elems[0] << " " << elems[1] << elems[2] << elems[3] << std::endl;
-            neighbor n = neighbor(elems[2], elems[3]);
-            list[std::stoi(elems[1])].push_back(n);
-        }
-     } while(std::getline(infile, line));
-
-    // printAdjacencyList(ans);
-}
-
-void printAdjacencyMatrix(const std::vector<std::vector<int>>& matrix) {
-  int size = static_cast<int>(matrix.size());
-  // std::cout << "size=" << size << std::endl;
-
-  for(int row=0; row<size; row++) { //node
-    std::cout << std::endl;
-
-    for(int col=0; col<size; col++) { //neeighbors
-      // std::cout << matrix[row][col] << " ";
-      printf("%2d ", matrix[row][col]);
-    }
-  }
-  std::cout << std::endl;
-}
-
-void printNbrs(const std::vector<int>& nbrs) {
-  int size = static_cast<int>(nbrs.size());
-  // std::cout << "size=" << size << std::endl;
-
-  std::cout << std::endl;
-  for(int row=0; row<size; row++) { //node
-      printf("node %2d neighbors: %2d\n", row, nbrs[row]);
-    }
-}
-
-void readGR2(std::ifstream& infile, std::vector<std::vector<int>>& matrix) {
-    std::string line;
-    int size = -1;
-    std::vector<std::string> elems;
-    int source, target, weight;
-
-    do {
-        std::istringstream iss(line);
-        // std::printf("%s\n", line.c_str());
-
-        if (line.rfind("p sp", 0) == 0) {
-            elems = split(line, ' ');            
-            size = std::stoi(elems[2]);
-            std::cout << "red graph with " << size << " nodes and " << elems[3] << " edges" << std::endl;
-
-            matrix.resize(size, std::vector<int> (size, -1));
-            std::cout << "init matrix " << size << "x" << size << std::endl;
-        }
-
-        if(line.rfind("a", 0) == 0) {
-            elems = split(line, ' ');
-            source = std::stoi(elems[1]) - 1;
-            target = std::stoi(elems[2]) - 1;
-            weight = std::stoi(elems[3]);
-            std::cout << "connection: " << elems[0] << " " << source << " " << target << " " << weight << std::endl;
-            // std::cout << "connection: " << elems[0] << " " << elems[1] << " " << elems[2] << " " << elems[3] << std::endl;
-            matrix[source][target] = weight;
-        }
-     } while(std::getline(infile, line));
-
-    // printAdjacencyList(ans);
-     // return matrix;
 }
 
 void printAdjacencyMatrix2(const std::vector<int>& matrix, const int size) {

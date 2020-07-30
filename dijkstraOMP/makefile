@@ -16,6 +16,7 @@ FLG_DBG=-fsanitize=thread -I../../libgomp/build/x86_64-pc-linux-gnu/libgomp
 LOG=$(wildcard *.log)
 
 SRC=$(filter-out %_test.cpp,$(wildcard *.cpp))
+DEP=../utils/data.cpp
 EXE=dipa
 
 SRC_TST=$(wildcard *_test.cpp)
@@ -34,7 +35,7 @@ all: build test
 
 .PHONY: build
 build: $(SRC)
-	$(CPP) $(SRC) -o $(EXE) $(FLG)
+	$(CPP) $(SRC) $(DEP) -o $(EXE) $(FLG)
 
 .PHONY: test
 test: $(SRC_TST)
@@ -42,7 +43,7 @@ test: $(SRC_TST)
 
 .PHONY: debug
 debug: $(SRC)
-	$(CPP) $(SRC) -o $(EXE) $(FLG) $(FLG_DBG)
+	$(CPP) $(SRC) $(DEP) -o $(EXE) $(FLG) $(FLG_DBG)
 
 clean:
 	rm -Rf $(EXE) $(LOG)

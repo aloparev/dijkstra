@@ -15,7 +15,7 @@
 #include <omp.h>
 #include <fstream>
 
-#include "data.h"
+#include "../utils/data.h"
 
 /** @brief Dijkstra implementation with OpenMP
     @author 557966
@@ -85,37 +85,54 @@ void dijkstra(vertex_t source, const adjacency_list_t& adjacency_list, std::vect
     omp_destroy_lock(&lock);
 }
 
-std::list <vertex_t> getShortestPathToX(vertex_t vertex, const std::vector <vertex_t>& previous) {
-    std::list <vertex_t> path;
+// std::list <vertex_t> getShortestPathToX(vertex_t vertex, const std::vector <vertex_t>& previous) {
+//     std::list <vertex_t> path;
     
-     do {
-        path.push_front(vertex);
-        vertex = previous[vertex];
-     } while(vertex != -1);
-    return path;
-}
+//      do {
+//         path.push_front(vertex);
+//         vertex = previous[vertex];
+//      } while(vertex != -1);
+//     return path;
+// }
 
-int main() {
-    std::ifstream infile("../resources/sampleGraph-1.gr");
-    adjacency_list_t adjacency_list; readGR(infile, adjacency_list);
+int main( int argc, char** argv) {
+    clock_t begin_time = clock();
+    const char* input_file_name;
+    int start, end;
+
+    printf("Dijkstra with OMP\nargc=%d\n", argc);
+    if (argc == 4) {
+        input_file_name = argv[1];
+        start = atoi(argv[2]);
+        end = (int) atoi(argv[3]);
+        printf("init from args:\n\tinput file = %s\n\tsource = %d\n\ttarget = %d\n", 
+            input_file_name, start, end);
+    }
+    else {
+        input_file_name = "../resources/sampleGraph-1.gr";
+        start = 0;
+        end = 4;
+        printf("no args submitted, use default values:\n\tinput file = %s\n\tsource = %d\n\ttarget = %d\n", input_file_name, start, end);
+    }
+    
+    std::ifstream infile(input_file_name);
+    adjacency_list_t adjacency_list; 
+    readGR(infile, adjacency_list);
     // remember to insert edges both ways for an undirected graph
     // adjacency_list_t adjacency_list(6);
     std::vector <weight_t> min_distance;
     std::vector <vertex_t> previous;
-    int start = 1;
-    int target = 5;
 
     printAdjacencyList(adjacency_list);
-    std::printf("init OK\n\n");
+    printf("init in %f sec OK\n\n", float( clock () - begin_time ) /  CLOCKS_PER_SEC);
 
-    const clock_t begin_time = clock();
+    begin_time = clock();
     dijkstra(start, adjacency_list, min_distance, previous);
-    std::printf("distance from start node [%d] to end node [%d] is %.2f\n"
-                "calculation time: %f sec\n",
-                start, target, min_distance[target], float( clock () - begin_time ) /  CLOCKS_PER_SEC);
+    printf("distance from start node [%d] to end node [%d] is %.2f\ncalc time: %f sec\n",
+        start, end, min_distance[end], float( clock () - begin_time ) /  CLOCKS_PER_SEC);
 
-    std::list <vertex_t> path = getShortestPathToX(target, previous);
-    std::cout << "path : ";
+    std::list <vertex_t> path = getShortestPathToX(end, previous);
+    std::cout << "path: ";
     std::copy(path.begin(), path.end(), std::ostream_iterator<vertex_t>(std::cout, " "));
     std::cout << std::endl;
 
