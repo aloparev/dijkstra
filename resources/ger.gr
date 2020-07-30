@@ -1,0 +1,31 @@
+p sp 264346 733846
+c https://www.bahn.de/p/view/service/fahrplaene/streckennetz.shtml
+c
+c berlin b
+c 
+c b eberswalde
+a 1 2 44
+c eberswalde angemuende
+a 2 3 24
+c angemuende prenzlau
+a 3 4 35
+c prenzlau pasewalk
+a 4 5 23
+c pasewalk anklam
+a 5 6 44
+c anklam zuessow
+a 6 7 17
+c zuessow greifswald
+a 7 8 16
+c greifswald stralsund
+a 8 9 32
+c stralsund bergen
+a 9 10 25
+c bergen binz
+a 10 11 12
+
+c b neustrelitz
+c neustrelitz waren
+c waren rostock
+c rostock warnemuende
+c rostock stralsund
