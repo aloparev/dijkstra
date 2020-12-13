@@ -1,16 +1,27 @@
+/** 
+ * @brief: helper unilities for C++ Dijkstra implementations
+ * @author 557966
+ * @date 31 V 2020
+ */
+
 #include <fstream>
 #include <sstream>
 #include <string>
 #include <vector>
+
 #include <iostream>
 #include <iterator>
 #include <algorithm>
 #include <map>
-#include <list>
 
+#include <list>
 #include "data.h"
 
-void printAdjacencyList(const adjacency_list_t &adjacency_list) {
+/**
+ * Prints graph in form of an adjacency list
+ * \param adjacency_list    graph representation
+ */
+void printAdjacencyList(const adjacency_list_t& adjacency_list) {
     int size = adjacency_list.size();
     printf("printing graph of size %d\n", size);
 
@@ -26,7 +37,13 @@ void printAdjacencyList(const adjacency_list_t &adjacency_list) {
         // std::printf("\n");
 }
 
-std::list <vertex_t> getShortestPathToX(vertex_t vertex, const std::vector <vertex_t> &previous) {
+/**
+ * Unfolds shortest path from target to source backwards
+ * \param vertex    target node
+ * \param previous  contains the predecessor for each node
+ * \return path     path from target to source
+ */
+std::list <vertex_t> getShortestPathToX(vertex_t vertex, const std::vector <vertex_t>& previous) {
     std::list <vertex_t> path;
     
      do {
@@ -36,6 +53,29 @@ std::list <vertex_t> getShortestPathToX(vertex_t vertex, const std::vector <vert
     return path;
 }
 
+/**
+ * Splits string on given delimiter
+ * \param s           string to be split
+ * \param delimiter   split delimiter
+ * \return tokens     string tokens, here: char from to weight
+ */
+std::vector<std::string> split(const std::string& s, char delimiter) {
+   std::vector<std::string> tokens;
+   std::string token;
+   std::istringstream tokenStream(s);
+
+   while (std::getline(tokenStream, token, delimiter)) {
+      tokens.push_back(token);
+   }
+
+   return tokens;
+}
+
+/**
+ * Reads from graph file into adjacenct list
+ * \param infile  file stream to read from
+ * \param list    list reference to write into
+ */
 void readGR(std::ifstream& infile, adjacency_list_t& list) {
     std::string line;
     int source, target, weight, size;
@@ -67,22 +107,10 @@ void readGR(std::ifstream& infile, adjacency_list_t& list) {
 }
 
 /**
-splits string on given delimiter
-return string vector
-here: char from to weight
-*/
-std::vector<std::string> split(const std::string& s, char delimiter) {
-   std::vector<std::string> tokens;
-   std::string token;
-   std::istringstream tokenStream(s);
-
-   while (std::getline(tokenStream, token, delimiter)) {
-      tokens.push_back(token);
-   }
-
-   return tokens;
-}
-
+ * Prints graph in form of an flattened adjacency matrix
+ * \param matrix  graph representation
+ * \param size    number of graph nodes
+ */
 void printAdjacencyMatrix2(const std::vector<int>& matrix, const int size) {
   printf("\nprinting flattened vector of size %d and line lenght %d\n", size*size, size);
 
@@ -97,7 +125,13 @@ void printAdjacencyMatrix2(const std::vector<int>& matrix, const int size) {
   std::cout << std::endl;
 }
 
-void readGR4(std::ifstream& infile, std::vector<int>& matrix, int &size) {
+/**
+ * Reads from graph file into adjacenct matrix
+ * \param infile  file stream to read from
+ * \param matrix  matrix reference to write into
+ * \param size    number of graph nodes
+ */
+void readGR4(std::ifstream& infile, std::vector<int>& matrix, int& size) {
     std::string line;
     std::vector<std::string> elems;
     int source, target, weight;

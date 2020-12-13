@@ -1,3 +1,9 @@
+/** 
+ * @brief: sequential Dijkstra implementation
+ * @author 557966
+ * @date 31 V 2020
+ */
+
 #include <iostream>
 #include <vector>
 #include <string>
@@ -16,12 +22,18 @@
 #include <fstream>
 #include "../utils/data.h"
 
-// sequential version
+/**
+ * Given directed, weighted graph, compute shortest path 
+ * \param source            source node as path start
+ * \param adjacency_list    graph representation
+ * \param min_distance      contains distances for each node
+ * \param previous          contains the predecessor for each node
+ */
 void dijkstra(vertex_t source,
 //                          references same memory cells
-                          const adjacency_list_t &adjacency_list,
-                          std::vector <weight_t> &min_distance,
-                          std::vector <vertex_t> &previous) {
+                          const adjacency_list_t& adjacency_list,
+                          std::vector <weight_t>& min_distance,
+                          std::vector <vertex_t>& previous) {
     int n = adjacency_list.size();
 
     min_distance.clear();
@@ -66,7 +78,13 @@ void dijkstra(vertex_t source,
     }
 }
 
-int main( int argc, char** argv) {
+/**
+ * Launcher
+ * \param argc      program argument counter
+ * \param argv      submitted arguments: 1=graph file path, 2=source node, 3=target node
+ * \return status   program exit status
+ */
+int main(int argc, char** argv) {
     clock_t begin_time = clock();
     const char* input_file_name;
     int start, end;

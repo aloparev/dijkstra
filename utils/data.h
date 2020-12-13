@@ -1,11 +1,12 @@
+/** 
+ * @brief: helper unilities header and custom data structures for C++ Dijkstra implementations
+ * @author 557966
+ * @date 31 V 2020
+ */
+
 #include <limits> // for numeric_limits
 #include <vector>
 #include <map>
-
-/** @brief Dijkstra helper header file with type and struct definitions.
-    @author 557966
-    @date 31 V 2020
-*/
 
 //! self defined types to quickly change type if need be
 typedef int vertex_t; // vertex=node

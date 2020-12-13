@@ -7,8 +7,8 @@ SRC=$(filter-out %_test.cpp,$(wildcard *.cpp))
 DEP=../utils/data.cpp
 EXE=dijkstra
 
-dijkstra: dijkstra.cpp
-	$(CPP) dijkstra.cpp -o dijkstra
+# dijkstra: dijkstra.cpp
+# 	$(CPP) dijkstra.cpp -o dijkstra
 
 .PHONY: all
 all: build

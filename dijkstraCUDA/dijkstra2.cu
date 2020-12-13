@@ -1,3 +1,13 @@
+/** 
+ * @brief: Dijkstra implementation with CUDA
+ * @author 557966
+ * @date 31 V 2020
+ *
+ * make sure the graph file starts with p sp!
+ * nvcc dijkstra2.cu -o dipa2; ./dipa2 ../resources/sampleGraph-1.gr 0 4
+ * dijkstraCUDA/dicu resources/ny-roads.gr 0 25906
+ */
+
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
@@ -21,20 +31,14 @@
 #include <map>
 #define _GNU_SOURCE 1
 
-/*
-make sure the graph file starts with p sp!
-
-nvcc dijkstra2.cu -o dipa2; ./dipa2 ../resources/sampleGraph-1.gr 0 4
-dijkstraCUDA/dicu resources/ny-roads.gr 0 25906
-*/
-
+/**
+ * custom data structures and relevant constants
+ */
 #define ONE 1
 #define MAX_THREADS_PER_BLOCK 1024
 const int max_weight = INT_MAX; //2,147,483,647
 std::vector<int> matrix;
 
-// typedef int vertex_t; // vertex=node
-// typedef double weight_t;
 struct neighbor {
     int target;
     int weight;
@@ -43,6 +47,16 @@ struct neighbor {
         : target(arg_target), weight(arg_weight) {}
 };
 
+/**
+ * GPU (device) kernel function: given directed, weighted graph, compute shortest path 
+ * \param matrix        graph representation
+ * \param size          number of graph nodes
+ * \param size2         number maximal edges per node
+ * \param min_distance  contains distances for each node
+ * \param previous      contains the predecessor for each node
+ * \param visited       contains status whether a node already was visited
+ * \param debug         boolean for extra output prints
+ */
 __global__ 
 void process_graph(const int* matrix, const int size, const int size2, int* min_distance, int* previous, int* visited, const bool debug) {
     __shared__ int u;
@@ -86,7 +100,7 @@ void process_graph(const int* matrix, const int size, const int size2, int* min_
             w = matrix[wi]; // weight
             if(debug) { printf("tid %d: t_index = %d/%d, t_value = %d/%d\n", tid, ti, wi, v, w); }
 
-            if(v == -1 || w == -1) {
+            if(v == -1) {
                 if(debug) { printf("tid=%d: skip empty slot\n", tid); }
                 continue;
             }
@@ -103,13 +117,24 @@ void process_graph(const int* matrix, const int size, const int size2, int* min_
             if (distance_through_u < min_distance[v]) {
                 min_distance[v] = distance_through_u;
                 previous[v] = u;
-                __syncthreads();
+                // __syncthreads();
                 if(debug) { printf("\trelaxation FROM %d TO %d WITH %d + %d = %d\n", u, v, min_distance[u], w, min_distance[u] + w); }
             }
         }
     }
 }
 
+/**
+ * Given directed, weighted graph, handle device calculation and data management
+ * \param source        source vertex as path start
+ * \param matrix        graph representation
+ * \param size          number of graph nodes
+ * \param size2         number maximal edges per node
+ * \param min_distance  contains distances for each node
+ * \param previous      contains the predecessor for each node
+ * \param visited       contains status whether a node already was visited
+ * \param debug         boolean for extra output prints
+ */
 void dijkstra(const int& source, const std::vector<int>& matrix, const int& size, const int& size2, std::vector<int>& min_distance, std::vector<int>& previous, std::vector<int>& visited, const bool& debug) {
     int* matrix_dev;
     int* min_distance_dev;
@@ -153,6 +178,11 @@ void dijkstra(const int& source, const std::vector<int>& matrix, const int& size
     cudaDeviceReset();
 }
 
+/**
+ * Prints graph in form of an flattened adjacency matrix
+ * \param matrix  graph representation
+ * \param size    number of graph nodes
+ */
 void printAdjacencyMatrix2(const std::vector<int>& matrix, const int size) {
   printf("\nprinting flattened vector of size %d and line lenght %d", size*size, size);
 
@@ -166,6 +196,12 @@ void printAdjacencyMatrix2(const std::vector<int>& matrix, const int size) {
   std::cout << std::endl;
 }
 
+/**
+ * Prints graph in form of sparse matrix
+ * \param matrix    graph representation
+ * \param size      number of graph nodes
+ * \param size2     number maximal edges per node
+ */
 void printSparseMatrix(const std::vector<int>& matrix, const int size, const int size2) {
   printf("\nprinting flattened sparse matrix of size %d and max line length %d\n", size, size2);
   printf("structure: node -> { (edge_1, weight_1), ... (edge_size2, weight_size2) }\n");
@@ -181,6 +217,12 @@ void printSparseMatrix(const std::vector<int>& matrix, const int size, const int
   // std::cout << std::endl;
 }
 
+/**
+ * Unfolds shortest path from target to source backwards
+ * \param vertex    target node
+ * \param previous  contains the predecessor for each node
+ * \return path     path from target to source
+ */
 std::list <int> getShortestPathToX(int vertex, const std::vector <int>& previous) {
     std::list <int> path;
     
@@ -191,6 +233,12 @@ std::list <int> getShortestPathToX(int vertex, const std::vector <int>& previous
     return path;
 }
 
+/**
+ * Launcher
+ * \param argc      program argument counter
+ * \param argv      submitted arguments: 1=graph file path, 2=source node, 3=target node, 4=extra prints
+ * \return status   program exit status
+ */
 int main(int argc, char** argv) {
     const clock_t begin_time = clock();
     

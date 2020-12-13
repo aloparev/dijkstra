@@ -1,6 +1,7 @@
 PROJECTS= \
 	dijkstra \
-	dijkstraOMP
+	dijkstraOMP \
+	dijkstraCUDA
 
 .PHONY: all
 all:

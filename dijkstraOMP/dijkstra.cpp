@@ -1,9 +1,17 @@
+/** 
+ * @brief: Dijkstra implementation with OpenMP
+ * @author 557966
+ * @date 31 V 2020
+ *
+ * OMP_NUM_THREADS=4 ./dipa
+ * valgrind --time-stamp=yes --tool=helgrind --log-file=helgrind.log ./dipa
+ * LD_LIBRARY_PATH=../../libgomp/build/x86_64-pc-linux-gnu/libgomp/.libs ./dipa
+ */
+
 #include <iostream>
 #include <vector>
 #include <string>
 #include <list>
-
-// #include <limits> // for numeric_limits
 
 #include <set>
 #include <utility> // for pair
@@ -17,20 +25,13 @@
 
 #include "../utils/data.h"
 
-/** @brief Dijkstra implementation with OpenMP
-    @author 557966
-    @date 31 V 2020
-    doxygen test
-*/
-
-/* 
-run: 
-    OMP_NUM_THREADS=4 ./dipa
-    valgrind --time-stamp=yes --tool=helgrind --log-file=helgrind.log ./dipa
-
-    LD_LIBRARY_PATH=../../libgomp/build/x86_64-pc-linux-gnu/libgomp/.libs ./dipa
-*/
-
+/**
+ * Given directed, weighted graph, compute shortest path 
+ * \param source            source vertex as path start
+ * \param adjacency_list    graph representation
+ * \param min_distance      contains distances for each node
+ * \param previous          contains the predecessor for each node
+ */
 void dijkstra(vertex_t source, const adjacency_list_t& adjacency_list, std::vector <weight_t>& min_distance, std::vector <vertex_t>& previous) {
     int graphSize = adjacency_list.size();
 
@@ -70,9 +71,10 @@ void dijkstra(vertex_t source, const adjacency_list_t& adjacency_list, std::vect
             weight_t distance_through_u = dist + weight;
 
             if (distance_through_u < min_distance[v]) {
-                // #pragma omp critical { //writes
+                // #pragma omp critical 
+                // { //writes
                     omp_set_lock(&lock);
-                    vertex_queue.erase(std::make_pair(min_distance[v], v));
+                    // vertex_queue.erase(std::make_pair(min_distance[v], v));
                     min_distance[v] = distance_through_u;
                     previous[v] = u;
                     vertex_queue.insert(std::make_pair(min_distance[v], v));
@@ -85,17 +87,13 @@ void dijkstra(vertex_t source, const adjacency_list_t& adjacency_list, std::vect
     omp_destroy_lock(&lock);
 }
 
-// std::list <vertex_t> getShortestPathToX(vertex_t vertex, const std::vector <vertex_t>& previous) {
-//     std::list <vertex_t> path;
-    
-//      do {
-//         path.push_front(vertex);
-//         vertex = previous[vertex];
-//      } while(vertex != -1);
-//     return path;
-// }
-
-int main( int argc, char** argv) {
+/**
+ * Launcher
+ * \param argc      program argument counter
+ * \param argv      submitted arguments: 1=graph file path, 2=source node, 3=target node
+ * \return status   program exit status
+ */
+int main(int argc, char** argv) {
     clock_t begin_time = clock();
     const char* input_file_name;
     int start, end;
@@ -123,7 +121,7 @@ int main( int argc, char** argv) {
     std::vector <weight_t> min_distance;
     std::vector <vertex_t> previous;
 
-    printAdjacencyList(adjacency_list);
+    // printAdjacencyList(adjacency_list);
     printf("init in %f sec OK\n\n", float( clock () - begin_time ) /  CLOCKS_PER_SEC);
 
     begin_time = clock();
